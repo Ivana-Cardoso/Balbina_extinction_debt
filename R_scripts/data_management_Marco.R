@@ -1,13 +1,20 @@
+
+#### Marco 2010 data ####
 rm(list = ls())
 gc()
 options(scipen = 999)
 set.seed(13)
 
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(lubridate)
+
 # Set working directory
 setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Dados_Marco/Dados_originais")
 
 # Import bird capture data
-field_data <- read.csv("capturas1.csv", header = TRUE)
+field_data <- read.csv("Marco_understory_birds_captures.csv", header = TRUE)
 
 # Exclude recaptured individuals
 field_data <- subset(
@@ -22,62 +29,184 @@ field_data$Espécie[field_data$Espécie == "Leptotila_rufaxila"] <- "Leptotila_r
 field_data$Espécie[field_data$Espécie == "Willisornis_poecilonotus"] <- "Willisornis_poecilinotus"
 field_data$Espécie[field_data$Espécie == "Xyphorhynchus_pardalotus"] <- "Xiphorhynchus_pardalotus"
 
-# Create occurrence column
-field_data$occurrence <- 1
+# Create occurrence and unique ID column, sum the transects that are on the same island
+colnames(field_data)[1] <- "Local"
+colnames(field_data)[4] <- "Data"
 
-# Construct a site-by-species matrix for island sites
-comm <- as.data.frame(
-  tapply(
-    field_data$occurrence,
-    list(field_data$Local, field_data$Espécie),
-    sum
-  )
-)
-
-# Replace NA values with zero
-comm[is.na(comm)] <- 0
-
-# Sum the transects that are on the same island
-comm[7, ]  <- colSums(comm[c(7,8), ])
-comm[16, ] <- colSums(comm[c(16,17), ])
-comm[19, ] <- colSums(comm[c(19,20), ])
-comm[24, ] <- colSums(comm[c(24,25), ])
-
-# Remove the second line of each pair
-comm <- comm[-c(8, 17, 20, 25),]
-
-# Rename the lines that were summed
-row.names(comm)[7] <- "1815"
-row.names(comm)[9] <- "213"
-row.names(comm)[15] <- "475"
-row.names(comm)[17] <- "690"
-row.names(comm)[20] <- "FCA_LOR"
-row.names(comm)[21] <- "FCC_WB"
-
-# Remove species name without epiteto especifico
-comm <- comm[, -c(46,55,62, 89)]
+field_data$Data <- as.Date(field_data$Data, format = "%d/%m/%Y")
 
 # Some of Marco's islands were sampled by Anderson and me, so I will add a new 
 # column with our islands names
-comm$island = NA
-comm = comm[,c(96,1:95)]
-comm$island[9] = "Cipoal"
-comm$island[3] = "Piquia"
-comm$island[6] = "Coata"
-comm$island[15] = "Martelo"
-comm$island[7] = "Gaviao_real"
-comm$island[4] = "Abusado"
-comm$island[14] = "Panema"
-comm$island[17] = "Beco_do_catitu"
-comm$island[2] = "Pontal"
-comm$island[18] = "Relogio"
-comm$island[19] = "Sapupara"
-comm$island[20] = "CF_Loreno"
-comm$island[21] = "CF_WABA"
+field_data$Local[field_data$Local == "213 B"] <- "Cipoal"
+field_data$Local[field_data$Local == "13"] <- "Piquia"
+field_data$Local[field_data$Local == "18.4"] <- "Coata"
+field_data$Local[field_data$Local == "475 C"] <- "Martelo"
+field_data$Local[field_data$Local == "475 D"] <- "Martelo"
+field_data$Local[field_data$Local == "1815 B"] <- "Gaviao_real"
+field_data$Local[field_data$Local == "1815 C"] <- "Gaviao_real"
+field_data$Local[field_data$Local == "16.5"] <- "Abusado"
+field_data$Local[field_data$Local == "4.7"] <- "Panema"
+field_data$Local[field_data$Local == "690 B"] <- "Beco_do_catitu"
+field_data$Local[field_data$Local == "690 C"] <- "Beco_do_catitu"
+field_data$Local[field_data$Local == "690 D"] <- "Beco_do_catitu"
+field_data$Local[field_data$Local == "126"] <- "Pontal"
+field_data$Local[field_data$Local == "85"] <- "Relogio"
+field_data$Local[field_data$Local == "98.6"] <- "Sapupara"
+field_data$Local[field_data$Local == "FCA LOR A"] <- "CF_Loreno"
+field_data$Local[field_data$Local == "FCC WB A"] <- "CF_WABA"
+field_data$Local[field_data$Local == "FCC WB B"] <- "CF_WABA"
 
-# Marco used the area of the island as IDs
-comm$area = rownames(comm)
-comm = comm[, c(1,97,2:96)]
+field_data <- field_data %>%
+  mutate(
+    occurrence = 1,
+    Ilha_Ano = paste(Local, Ano, sep = "_")
+  )
+
+# Construct a site-by-species matrix for island sites
+comm <- field_data %>%
+  group_by(Ilha_Ano, Local, Ano, Data, Espécie) %>%
+  summarise(
+    occurrence = sum(occurrence),
+    .groups = "drop"
+  ) %>%
+  pivot_wider(
+    names_from = Espécie,
+    values_from = occurrence,
+    values_fill = 0
+  )
+
+insularization_year <- "01/10/1987"
+insularization_year <- as.Date(insularization_year, format = "%d/%m/%Y")
+
+comm$t <- time_length(
+  interval(insularization_year, comm$Data),
+  unit = "years"
+)
+
+comm$t <- round(comm$t, 2)
 
 setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Dados_Marco")
-write.csv(comm, "comm_Marco.csv")
+#write.csv(comm, "comm_Marco.csv")
+
+
+
+#### Bueno 2015 data ####
+rm(list = ls())
+gc()
+
+# Set working directory
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Dados_Marco/Dados_originais")
+
+# Import bird capture data
+field_data <- read.csv("Bueno_understory_birds_captures.csv", header = TRUE)
+
+# Exclude recaptured individuals
+field_data <- subset(
+  field_data,
+  status != "Recapture"
+)
+
+# Create occurrence and unique ID column, sum the transects that are on the same island
+colnames(field_data)[15] <- "Local"
+colnames(field_data)[11] <- "Data"
+colnames(field_data)[13] <- "Ano"
+
+field_data$Data <- as.Date(field_data$Data, format = "%d/%m/%Y")
+
+field_data <- field_data %>%
+  mutate(
+    occurrence = 1,
+    Ilha_Ano = paste(Local, Ano, sep = "_")
+  )
+
+# Construct a site-by-species matrix for island sites
+comm <- field_data %>%
+  group_by(Ilha_Ano, Local, Ano, Data, species) %>%
+  summarise(
+    occurrence = sum(occurrence),
+    .groups = "drop"
+  ) %>%
+  pivot_wider(
+    names_from = species,
+    values_from = occurrence,
+    values_fill = 0
+  )
+
+insularization_year <- "01/10/1987"
+insularization_year <- as.Date(insularization_year, format = "%d/%m/%Y")
+
+comm$t <- time_length(
+  interval(insularization_year, comm$Data),
+  unit = "years"
+)
+
+comm$t <- round(comm$t, 2)
+
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Dados_Marco")
+#write.csv(comm, "comm_Bueno.csv")
+
+
+#### Amarante 2023 data ####
+rm(list = ls())
+gc()
+
+# Set working directory
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Dados_Marco/Dados_originais")
+
+# Import bird capture data
+field_data <- read.csv("Amarante_understory_birds_captures.csv", header = TRUE)
+
+# Exclude recaptured individuals
+field_data <- subset(
+  field_data,
+  status != "Recapture"
+)
+
+# Create occurrence and unique ID column, sum the transects that are on the same island
+colnames(field_data)[15] <- "Local"
+colnames(field_data)[11] <- "Data"
+colnames(field_data)[13] <- "Ano"
+
+field_data$Data <- as.Date(field_data$Data, format = "%d/%m/%Y")
+
+field_data <- field_data %>%
+  mutate(
+    occurrence = 1,
+    Ilha_Ano = paste(Local, Ano, sep = "_")
+  )
+
+# Construct a site-by-species matrix for island sites
+comm <- field_data %>%
+  group_by(Ilha_Ano, Local, Ano, Data, species) %>%
+  summarise(
+    occurrence = sum(occurrence, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  filter(!is.na(species)) %>%
+  pivot_wider(
+    names_from = species,
+    values_from = occurrence,
+    values_fill = 0
+  )
+# note that it excluded the islands that were sampled, but no species were captured. I will add it back manually in excel
+
+insularization_year <- "01/10/1987"
+insularization_year <- as.Date(insularization_year, format = "%d/%m/%Y")
+
+arrepiado_2024 <- "21/06/2024"
+arrepiado_2024 <- as.Date(arrepiado_2024, format = "%d/%m/%Y")
+
+time_length(
+  interval(insularization_year, arrepiado_2024),
+  unit = "years"
+)
+
+comm$t <- time_length(
+  interval(insularization_year, comm$Data),
+  unit = "years"
+)
+
+comm$t <- round(comm$t, 2)
+
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Dados_Marco")
+#write.csv(comm, "comm_Amarante.csv")
