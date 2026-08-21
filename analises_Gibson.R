@@ -100,15 +100,15 @@ gibson_island <- gibson_data %>%
     richness = rowSums(across(Callosciurus.caniceps:Tupaia.glis) > 0)
   )
 
-abund <- t(as.matrix(gibson_island[, 4:15]))
-out <- iNEXT(abund)
+#abund <- t(as.matrix(gibson_island[, 4:15]))
+#out <- iNEXT(abund)
 
 
 
 gibson_island$t <- gibson_island$year - 1987
 print(table(gibson_island$year, gibson_island$t))
 
-gibson_island <- gibson_island[!gibson_island$island %in% c("X1", "X2", "X3", "X4"), ]
+#gibson_island <- gibson_island[!gibson_island$island %in% c("X1", "X2", "X3", "X4"), ]
 
 
 gibson_SA <- gibson_island[,c(3,16)]
@@ -122,15 +122,15 @@ SAR_MOD
 #gibson_SA$island <- gibson_island$island
 #gibson_SA$year <- gibson_island$year
 
+#fit <- nls(richness ~ sinf - (sinf - c*area^z) * exp(-k*t),
+#           data = gibson_island,
+#           start = list(sinf = 0.1, c = 1.3484891, z = 0.4371562, k = 0.1),
+#           control = nls.control(maxiter = 200))
+
 fit <- nls(richness ~ sinf - (sinf - c*area^z) * exp(-k*t),
            data = gibson_island,
-           start = list(sinf = 0.1, c = 1.3484891, z = 0.4371562, k = 0.1),
+           start = list(sinf = 0.1, c = 1.1541884, z = 0.4214402, k = 0.1),
            control = nls.control(maxiter = 200))
-
-#fit2 <- nls(richness ~ sinf - (sinf - c*area^z) * exp(-k*t),
-#           data = gibson_SA,
-#           start = list(sinf = 0.1, c = 1.1541884, z = 0.4214402, k = 0.1),
-#           control = nls.control(maxiter = 200))
 
 print(summary(fit))
 
@@ -189,6 +189,14 @@ plot(NULL, xlim=c(0,80), ylim=c(0,15),
 for (i in seq_along(areas_ilustrativas)) {
   lines(t_seq, St(t_seq, areas_ilustrativas[i]), col=cols[i], lwd=2)
 }
+points(gibson_island$t, gibson_island$richness,
+       pch=16, col="black")
+legend("topright",
+      legend = paste(areas_ilustrativas, "ha"),
+      col    = cols,
+      lwd    = 2,
+      cex    = 0.8,
+      bty    = "n") 
 
 ## ---- Painel B: taxa de extinção ----
 plot(NULL, xlim=c(0,80), ylim=c(-1,0),

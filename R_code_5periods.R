@@ -1,0 +1,591 @@
+# Extinction debt in Balbina
+#
+# Ivana Cardoso
+# ivanawaters@gmail.com
+# Created on May 27, 2026
+# Last modified on August 16, 2026
+
+library(dplyr)
+library(iNEXT)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+library(ggpubr)
+library(sars)
+
+# Preparing workspace
+rm(list = ls())
+gc()
+options(scipen = 999)
+set.seed(13)
+
+# Set working directory
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Dados_Marco")
+
+#### Preparing data ####
+# Import bird capture data
+Aurelio_Silva_comm <- read.csv("comm_Marco.csv", header = TRUE)
+Bueno_comm <- read.csv("comm_Bueno.csv", header = TRUE)
+Amarante_comm <- read.csv("comm_Amarante.csv", header = TRUE)
+
+# Remove the continuous forest sites
+Aurelio_Silva_comm <- Aurelio_Silva_comm[-c(11:12),]
+Aurelio_Silva_comm <- bind_cols(
+  Aurelio_Silva_comm[, 1:6],
+  Aurelio_Silva_comm[, 7:103] %>% select(where(~ sum(.x, na.rm = TRUE) > 0))
+)
+
+Bueno_comm <- Bueno_comm[-c(13:22),]
+Bueno_comm <- bind_cols(
+  Bueno_comm[, 1:6],
+  Bueno_comm[, 7:136] %>% select(where(~ sum(.x, na.rm = TRUE) > 0))
+)
+
+Amarante_comm <- Amarante_comm[-c(13:22),]
+Amarante_comm <- bind_cols(
+  Amarante_comm[, 1:6],
+  Amarante_comm[, 7:120] %>% select(where(~ sum(.x, na.rm = TRUE) > 0))
+)
+
+dados <- bind_rows(Aurelio_Silva_comm, Bueno_comm, Amarante_comm)
+dados[is.na(dados)] <- 0
+
+dados$periodo_5 <- NA
+dados$periodo_5[1:21] <- "2010"
+dados$periodo_5[22:87] <- dados$year[22:87]
+dados$periodo_5[88:151] <- dados$year[88:151]
+dados$periodo_5 <- as.numeric(dados$periodo_5)
+
+dados$t5 <- NA
+dados$t5 <- dados$year - 1987
+
+dados$site_5year <- paste(dados$site, dados$periodo_5, sep = "_")
+
+col_sp <- colnames(dados)[7:149]
+
+dados_5years <- bind_rows(
+  dados[1:21, ] %>%
+    group_by(site_5year) %>%
+    summarise(
+      area = first(area),
+      t5 = first(t5),
+      across(all_of(col_sp), sum, na.rm = TRUE),
+      .groups = "drop"
+    ),
+  dados[22:151, ]
+)
+
+dados_5years <- dados_5years[,-c(147:151)]
+dados_5years <- dados_5years[,c(1,2,147,3,4:146)]
+dados_5years$periodo_5[1:19] <- "2010"
+dados_5years$periodo_5 <- as.numeric(dados_5years$periodo_5)
+
+Aurelio_Silva_comm$periodo_5 <- NA
+Aurelio_Silva_comm$periodo_5 <- "2010"
+Aurelio_Silva_comm$periodo_5 <- as.numeric(Aurelio_Silva_comm$periodo_5)
+
+Aurelio_Silva_comm$t5 <- NA
+Aurelio_Silva_comm$t5 <- Aurelio_Silva_comm$periodo_5 - 1987
+Aurelio_Silva_comm$site_5year <- paste(Aurelio_Silva_comm$site, Aurelio_Silva_comm$periodo_5, sep = "_")
+
+# dados_5years$site_5year, Aurelio_Silva_comm$site_5year
+
+col_sp <- colnames(Aurelio_Silva_comm)[7:84]
+Aurelio_Silva_5 <- Aurelio_Silva_comm %>%
+  group_by(site_5year) %>%
+  summarise(
+    area = first(area),
+    t5 = first(t5),
+    across(all_of(col_sp), sum, na.rm = TRUE)
+  )
+
+Bueno_comm$periodo_5 <- NA
+Bueno_comm$periodo_5 <- Bueno_comm$year
+Bueno_comm$periodo_5 <- as.numeric(Bueno_comm$periodo_5)
+
+Bueno_comm$t5 <- NA
+Bueno_comm$t5 <- Bueno_comm$year - 1987
+
+Bueno_comm$site_5year <- paste(Bueno_comm$site, Bueno_comm$periodo_5, sep = "_")
+
+col_sp <- colnames(Bueno_comm)[7:115]
+Bueno_comm_5 <- Bueno_comm %>%
+  group_by(site_5year) %>%
+  summarise(
+    area = first(area),
+    t5 = first(t5),
+    across(all_of(col_sp), sum, na.rm = TRUE)
+  )
+
+Amarante_comm$periodo_5 <- NA
+Amarante_comm$periodo_5 <- Amarante_comm$year
+Amarante_comm$periodo_5 <- as.numeric(Amarante_comm$periodo_5)
+
+Amarante_comm$t5 <- NA
+Amarante_comm$t5 <- Amarante_comm$periodo_5 - 1987
+
+Amarante_comm$site_5year <- paste(Amarante_comm$site, Amarante_comm$periodo_5, sep = "_")
+
+col_sp <- colnames(Amarante_comm)[7:95]
+Amarante_comm_5 <- Amarante_comm %>%
+  group_by(site_5year) %>%
+  summarise(
+    area = first(area),
+    t5 = first(t5),
+    across(all_of(col_sp), sum, na.rm = TRUE)
+  )
+
+
+##############################################################
+#### USING 5 PERIODS - 2010+2011, 2015, 2016, 2023, 2014 ####
+##############################################################
+#### using iNEXT for richness (q=0) ####
+build_abund_list <- function(df, sp_cols) {
+  
+  sp_data <- df[, sp_cols, drop = FALSE]
+  
+  setNames(
+    lapply(seq_len(nrow(df)), function(i) {
+      
+      v <- sp_data[i, ]
+      
+      # garantir que os valores sejam numéricos
+      v <- as.numeric(v)
+      names(v) <- sp_cols
+      
+      # manter apenas espécies com abundância > 0
+      v[v > 0 & !is.na(v)]
+      
+    }),
+    df$site_5year
+  )
+}
+
+sp_marco    <- names(Aurelio_Silva_comm)[7:84]
+sp_bueno    <- names(Bueno_comm)[7:115]
+sp_amarante <- names(Amarante_comm)[7:95]
+
+list_2010 <- build_abund_list(Aurelio_Silva_5, sp_marco)
+list_2015 <- build_abund_list(Bueno_comm_5, sp_bueno)
+list_2023 <- build_abund_list(Amarante_comm_5, sp_amarante)
+
+dados_5 <- c(list_2010, list_2015, list_2023)
+dados_5 <- dados_5[sapply(dados_5, sum) > 0] 
+
+x <- iNEXT(dados_5, q = 0, datatype = "abundance", endpoint = NULL, nboot = 100)
+
+# Returning the SC for each Assemblage after doubling the number of individuals.
+SC <- aggregate(x$iNextEst$coverage_based$SC, 
+                list(x$iNextEst$coverage_based$Assemblage), max)[, "x"]
+hist(SC)
+table(SC >= 0.8)
+
+out_0.8 <- estimateD(dados_5, q = 0, datatype = "abundance",
+                     base = "coverage", level = 0.8,
+                     nboot = 1000,
+                     conf = 0.95)
+colnames(out_0.8)[1] <- "site_5year"
+
+out_0.9 <- estimateD(dados_5, q = 0, datatype = "abundance",
+                     base = "coverage", level = 0.9,
+                     nboot = 1000,
+                     conf = 0.95)
+colnames(out_0.9)[1] <- "site_5year"
+
+chao1 <- ChaoRichness(dados_5, datatype = "abundance")
+chao1$site_5year <- row.names(chao1)
+
+dados_5years <- dados_5years %>%
+  left_join(out_0.8 %>% select(site_5year, qD), by = "site_5year")
+colnames(dados_5years)[148]<- "est_rich_0.8"
+
+dados_5years <- dados_5years %>%
+  left_join(out_0.9 %>% select(site_5year, qD), by = "site_5year")
+colnames(dados_5years)[149] <- "est_rich_0.9"
+
+dados_5years <- dados_5years %>%
+  left_join(chao1 %>% select(site_5year, Estimator), by = "site_5year")
+colnames(dados_5years)[150] <- "chao1"
+
+dados_5years <- dados_5years %>%
+  left_join(chao1 %>% select(site_5year, Observed), by = "site_5year")
+colnames(dados_5years)[151] <- "obs.richness"
+
+dados_5years$obs.richness[is.na(dados_5years$obs.richness)] <- 0
+
+# setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt")
+# write.csv(dados_5years, "dados_completos_5periodos.csv")
+dados_5years <- read.csv("dados_completos_5periodos.csv")
+rownames(dados_5years) <- dados_5years$site_5year
+
+##### Calculating the biogeographic model ####
+# Following Gibson et al., 2013
+# St = s_inf - (s_inf - c * a^z) * exp(-k * t)
+#
+# Parameters:
+#   s_inf : asymptotic species richness as t -> infinity
+#   c     : SAR constant  (S0 = c * a^z)
+#   z     : SAR exponent
+#   k     : relaxation rate (= I0 + E0)
+
+########################################
+#### Observed richness x 5 periodos ####
+########################################
+data_SA <- dados_5years[,c(2, 151)] #area and richness obs
+data_SA$area <- as.numeric(data_SA$area)
+data_SA$obs.richness <- as.numeric(data_SA$obs.richness)
+data_SA <- as.data.frame(data_SA)
+
+SAR_MOD <- sar_power(data_SA)
+SAR_MOD # c = 3.8414063, z = 0.2315986
+
+data_SA$t <- dados_5years$t5
+
+fit <- nls(obs.richness ~ sinf - (sinf - c*area^z) * exp(-k*t),
+           data = data_SA,
+           start = list(sinf = 1, c = SAR_MOD$par[1], z = SAR_MOD$par[2], 
+                        k = 0.01),
+           control = nls.control(maxiter = 1000))
+
+print(summary(fit))
+cat("\nCoeficientes:\n"); print(coef(fit))
+
+
+# R^2 (pseudo, como no artigo: 1 - SSresid/SStotal)
+obs <- data_SA$obs.richness
+pred <- predict(fit)
+R2 <- 1 - sum((obs - pred)^2) / sum((obs - mean(obs))^2)
+R2 #0.686
+
+# Parâmetros 
+s_inf <- coef(fit)[1]
+cc <- coef(fit)[2]
+zz <- coef(fit)[3]
+k <- coef(fit)[4]
+
+St <- function(tempo, area) {
+  S0 <- cc * area^zz
+  s_inf - (s_inf - S0) * exp(-k * tempo)
+}
+
+# derivada = taxa de extinção (painel B)
+dSt <- function(tempo, area) {
+  S0 <- cc * area^zz
+  -k * (S0 - s_inf) * exp(-k * tempo)
+}
+
+# tempo até perder metade das espécies (painel C)
+t_half <- function(area) {
+  S0 <- cc * area^zz
+  -(1/k) * log((s_inf - S0/2) / (s_inf - S0))
+}
+
+t_seq <- seq(1, 100, length.out = 100)
+
+png("obs_rich_5t.png", width=1200, height=400, res=120)
+par(mfrow = c(1, 3), mar = c(4.5, 4.5, 2, 1)) 
+
+areas_ilustrativas <- c(1, 5, 10, 25, 50, 100, 500, 1000)
+cols <- c("cyan3","blue","darkgreen","red","black", "orange", "yellow", "pink")
+
+plot(NULL, xlim=c(0,100), ylim=c(0,70),
+     xlab="Time since isolation", ylab="Number of species remaining")
+for (i in seq_along(areas_ilustrativas)) {
+  lines(t_seq, St(t_seq, areas_ilustrativas[i]), col=cols[i], lwd=2)
+}
+points(data_SA$t, data_SA$obs.richness,
+       pch=16, col="black")
+legend("topright",
+       legend = paste(areas_ilustrativas, "ha"),
+       col    = cols,
+       lwd    = 2,
+       cex    = 0.8,
+       bty    = "n")   # bty="n" tira a caixa ao redor da legenda
+
+
+plot(NULL, xlim=c(0,100), ylim=c(-1,0),
+     xlab="Time since isolation", ylab="Rate of species extinction")
+for (i in seq_along(areas_ilustrativas)) {
+  lines(t_seq, dSt(t_seq, areas_ilustrativas[i]), col=cols[i], lwd=2)
+}
+legend("bottomright",
+       legend = paste(areas_ilustrativas, "ha"),
+       col    = cols,
+       lwd    = 2,
+       cex    = 0.8,
+       bty    = "n")   # bty="n" tira a caixa ao redor da legenda
+
+
+areas_reais <- unique(data_SA$area)
+areas_reais <- sort(areas_reais)
+
+th <- t_half(areas_reais)
+mean(th)
+sd(th)
+
+plot(areas_reais, th, type = "n",
+     xlab = "Fragment area (ha)", ylab = expression(t[1/2]),
+     xlim = c(0, 1850), ylim = c(17, 22))
+
+# só plota/liga os pontos com t1/2 válido (a partir de ~0.8 ha)
+ok <- !is.na(th)
+points(areas_reais[ok], th[ok], pch = 1)
+lines(areas_reais[ok], th[ok])
+
+dev.off()
+par(mfrow = c(1, 1))
+
+
+################################################
+#### Estimated richness SC 0.8 x 6 periodos ####
+################################################
+data_SA <- dados_6years[,c(6, 163)] 
+data_SA$area <- as.numeric(data_SA$area)
+data_SA$est_rich_0.8 <- as.numeric(data_SA$est_rich_0.8)
+data_SA <- as.data.frame(data_SA)
+data_SA <- na.omit(data_SA)
+SAR_MOD <- sar_power(data_SA)
+SAR_MOD # c = 4.6638544, z = 0.2350502
+
+data_SA$t <- dados_6years$t5[-c(95,105)]
+
+fit <- nls(est_rich_0.8 ~ sinf - (sinf - c*area^z) * exp(-k*t),
+           data = data_SA,
+           start = list(sinf = 1, c = 4.6638544, z = 0.2350502, 
+                        k = 0.01),
+           control = nls.control(maxiter = 1000))
+
+print(summary(fit))
+cat("\nCoeficientes:\n"); print(coef(fit))
+
+
+# R^2 (pseudo, como no artigo: 1 - SSresid/SStotal)
+obs <- data_SA$est_rich_0.8
+pred <- predict(fit)
+R2 <- 1 - sum((obs - pred)^2) / sum((obs - mean(obs))^2)
+R2 #0.449
+
+# Parâmetros 
+s_inf <- coef(fit)[1]
+cc <- coef(fit)[2]
+zz <- coef(fit)[3]
+k <- coef(fit)[4]
+
+St <- function(tempo, area) {
+  S0 <- cc * area^zz
+  s_inf - (s_inf - S0) * exp(-k * tempo)
+}
+
+# derivada = taxa de extinção (painel B)
+dSt <- function(tempo, area) {
+  S0 <- cc * area^zz
+  -k * (S0 - s_inf) * exp(-k * tempo)
+}
+
+# tempo até perder metade das espécies (painel C)
+t_half <- function(area) {
+  S0 <- cc * area^zz
+  -(1/k) * log((s_inf - S0/2) / (s_inf - S0))
+}
+
+t_seq <- seq(0, 100, length.out = 300)
+
+png("est_rich08_5t.png", width=1200, height=400, res=120)
+par(mfrow = c(1, 3), mar = c(4.5, 4.5, 2, 1)) 
+
+areas_ilustrativas <- c(1, 5, 10, 25, 50, 100, 500, 1000)   # números redondos, só p/ ilustrar
+cols <- c("cyan3","blue","darkgreen","red","black", "orange", "yellow", "pink")
+
+plot(NULL, xlim=c(0,100), ylim=c(0,70),
+     xlab="Time since isolation", ylab="Number of species remaining")
+for (i in seq_along(areas_ilustrativas)) {
+  lines(t_seq, St(t_seq, areas_ilustrativas[i]), col=cols[i], lwd=2)
+}
+legend("topright",
+       legend = paste(areas_ilustrativas, "ha"),
+       col    = cols,
+       lwd    = 2,
+       cex    = 0.8,
+       bty    = "n")   # bty="n" tira a caixa ao redor da legenda
+
+
+plot(NULL, xlim=c(0,100), ylim=c(-1,0),
+     xlab="Time since isolation", ylab="Rate of species extinction")
+for (i in seq_along(areas_ilustrativas)) {
+  lines(t_seq, dSt(t_seq, areas_ilustrativas[i]), col=cols[i], lwd=2)
+}
+legend("bottomright",
+       legend = paste(areas_ilustrativas, "ha"),
+       col    = cols,
+       lwd    = 2,
+       cex    = 0.8,
+       bty    = "n")   # bty="n" tira a caixa ao redor da legenda
+
+
+areas_reais <- unique(data_SA$area)
+areas_reais <- sort(areas_reais)
+
+th <- t_half(areas_reais)
+mean(th)
+sd(th)
+
+plot(areas_reais, th, type = "n",
+     xlab = "Fragment area (ha)", ylab = expression(t[1/2]),
+     xlim = c(0, 1850), ylim = c(20, 35))
+
+# só plota/liga os pontos com t1/2 válido (a partir de ~0.8 ha)
+ok <- !is.na(th)
+points(areas_reais[ok], th[ok], pch = 1)
+lines(areas_reais[ok], th[ok])
+
+dev.off()
+par(mfrow = c(1, 1))
+
+
+############################
+#### Chao1 x 6 periodos ####
+############################
+data_SA <- dados_6years[,c(6, 165)] 
+data_SA$area <- as.numeric(data_SA$area)
+data_SA$chao1 <- as.numeric(data_SA$chao1)
+data_SA <- as.data.frame(data_SA)
+data_SA <- na.omit(data_SA)
+SAR_MOD <- sar_power(data_SA)
+SAR_MOD # c = 6.9165520, z = 0.2461852
+
+data_SA$t <- dados_6years$t5[-c(95,105)]
+
+fit <- nls(chao1 ~ sinf - (sinf - c*area^z) * exp(-k*t),
+           data = data_SA,
+           start = list(sinf = 1, c = SAR_MOD$par[1], z = SAR_MOD$par[2], 
+                        k = 0.01),
+           control = nls.control(maxiter = 1000))
+
+print(summary(fit))
+cat("\nCoeficientes:\n"); print(coef(fit))
+
+
+# R^2 (pseudo, como no artigo: 1 - SSresid/SStotal)
+obs <- data_SA$chao1
+pred <- predict(fit)
+R2 <- 1 - sum((obs - pred)^2) / sum((obs - mean(obs))^2)
+R2
+
+# Parâmetros 
+s_inf <- coef(fit)[1]
+cc <- coef(fit)[2]
+zz <- coef(fit)[3]
+k <- coef(fit)[4]
+
+St <- function(tempo, area) {
+  S0 <- cc * area^zz
+  s_inf - (s_inf - S0) * exp(-k * tempo)
+}
+
+# derivada = taxa de extinção (painel B)
+dSt <- function(tempo, area) {
+  S0 <- cc * area^zz
+  -k * (S0 - s_inf) * exp(-k * tempo)
+}
+
+# tempo até perder metade das espécies (painel C)
+t_half <- function(area) {
+  S0 <- cc * area^zz
+  -(1/k) * log((s_inf - S0/2) / (s_inf - S0))
+}
+
+t_seq <- seq(0, 100, length.out = 300)
+
+png("chao1_5t.png", width=1200, height=400, res=120)
+par(mfrow = c(1, 3), mar = c(4.5, 4.5, 2, 1)) 
+
+areas_ilustrativas <- c(1, 5, 10, 25, 50, 100, 500, 1000)   # números redondos, só p/ ilustrar
+cols <- c("cyan3","blue","darkgreen","red","black", "orange", "yellow", "pink")
+
+plot(NULL, xlim=c(0,100), ylim=c(0,100),
+     xlab="Time since isolation", ylab="Number of species remaining")
+for (i in seq_along(areas_ilustrativas)) {
+  lines(t_seq, St(t_seq, areas_ilustrativas[i]), col=cols[i], lwd=2)
+}
+legend("topright",
+       legend = paste(areas_ilustrativas, "ha"),
+       col    = cols,
+       lwd    = 2,
+       cex    = 0.8,
+       bty    = "n")   # bty="n" tira a caixa ao redor da legenda
+
+plot(NULL, xlim=c(0,100), ylim=c(-1,0),
+     xlab="Time since isolation", ylab="Rate of species extinction")
+for (i in seq_along(areas_ilustrativas)) {
+  lines(t_seq, dSt(t_seq, areas_ilustrativas[i]), col=cols[i], lwd=2)
+}
+legend("bottomright",
+       legend = paste(areas_ilustrativas, "ha"),
+       col    = cols,
+       lwd    = 2,
+       cex    = 0.8,
+       bty    = "n")   # bty="n" tira a caixa ao redor da legenda
+
+
+areas_reais <- unique(data_SA$area)
+areas_reais <- sort(areas_reais)
+
+th <- t_half(areas_reais)
+mean(th)
+sd(th)
+
+plot(areas_reais, th, type = "n",
+     xlab = "Fragment area (ha)", ylab = expression(t[1/2]),
+     xlim = c(0, 1850), ylim = c(14, 23))
+
+ok <- !is.na(th)
+points(areas_reais[ok], th[ok], pch = 1)
+lines(areas_reais[ok], th[ok])
+
+dev.off()
+par(mfrow = c(1, 1))
+
+
+
+
+
+
+
+#### BOXPLOTS
+dados_5years$periodo_5 <- as.factor(dados_5years$periodo_5)
+
+obs_rich_3 <-
+  ggplot(mapping = aes(x = periodo_5, y = obs.richness),
+         data = dados_5years) +
+  labs(x = "Ano de amostragem", y = "Riqueza observada",
+       title = "Riqueza observada - cinco períodos") +
+  geom_boxplot(outliers = FALSE) +
+  scale_x_discrete(
+    labels = c(
+      "2010" = "2010-2011",
+      "2015" = "2015",
+      "2016" = "2016",
+      "2023" = "2023",
+      "2024" = "2024"
+    )
+  )+
+  geom_point(position = position_jitter(), size = 3, alpha = 0.3) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    size = 4,
+    color = "red"
+  )+
+  theme_bw(base_size = 16) +
+  theme(panel.grid = element_blank(),
+        panel.border = element_rect(colour = "black"),
+        axis.title = element_text(colour = "black", face = "bold"),
+        axis.text = element_text(colour = "black"),
+        axis.ticks = element_line(colour = "black", size = 0.25),
+        plot.margin = margin(0.5, 1.5, 0.5, 1.5, "cm"),
+        legend.position = "bottom")
+obs_rich_3
+
+
+
+
