@@ -453,28 +453,21 @@ paste0("Estimamos que uma ilha de ", richness_2026$A,
   "% de seu débito de extinção após ", 2026 - 1987, 
   " anos de isolamento.")
 
-debt_paid_area <-
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Balbina_cap.3/Figures")
+png("debt_paid_area.png", width = 14, height = 10,units = "cm", res = 900)
 plot(debt_paid ~ log10(richness_2026$A),
      main = "Paid extinction debt over 39 years of island creation",
      xlab = "Island area (ha)",
      ylab = "Extinction debt paid (%)",
      xaxt = "n",
      las = 1,
-     pch = 21, col = "black", bg = "lightgrey", cex = 1.5)
+     pch = 21, col = "black", bg = "lightgrey", cex = 1.5)+
 axis(1,
      at = log10(c(1, 10, 100, 1000)),
-     labels = c(1, 10, 100, 1000))
-
+     labels = c(1, 10, 100, 1000))+
 abline(v = log10(c(1, 10, 100, 1000)),
        lty = "dashed", col = "lightgrey")
-
-setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Balbina_cap.3/Figures")
-ggsave("debt_paid_area.png",
-       plot = debt_paid_area,
-       width = 10,
-       height = 8,
-       units = "cm",
-       dpi = 900)
+dev.off()
 
 
 # Mean half-life between islands
