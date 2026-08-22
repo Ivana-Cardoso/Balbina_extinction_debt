@@ -4,7 +4,7 @@
 # Ivana Cardoso
 # ivanawaters@gmail.com
 # Created: 19 August 2026
-# Last modified: 21 August 2026
+# Last modified: 22 August 2026
 #################################
 
 rm(list = ls())
@@ -90,6 +90,9 @@ Aurelio_Silva_comm_islands <- Aurelio_Silva_comm_islands %>%
   summarise(across(1:8, first),
     across(9:last_col(), ~ sum(.x, na.rm = TRUE)),
     .groups = "drop")
+Aurelio_Silva_comm_islands$ilha[10] <- "Beco_do_Catitu"
+Aurelio_Silva_comm_islands$Ilha_Ano[10] <- "Beco_do_Catitu_B_2010"
+Aurelio_Silva_comm_islands$Local[10] <- "Beco_do_Catitu_B"
 
 Bueno_comm_islands <- Bueno_comm[-c(13:22),]
 Bueno_comm_islands <- bind_cols(
@@ -261,9 +264,6 @@ data_debt <- data_debt[,c(4,1:3)]
 data_debt <- data_debt %>%
   left_join(Balbina_islands %>% select(site, obs.richness),
             by = "site")
-
-#data_debt$"remaining_sp%" <- data_debt$obs.richness/data_debt$Sinitial_max * 100
-
 data_debt <- data_debt %>%
   left_join(Balbina_islands %>% select(site, t),
             by = "site")
@@ -276,35 +276,9 @@ data_debt <- data_debt %>%
 data_debt$Ano[1:19] <- 2010 #Im considering Marco's as one period
 data_debt$Ano <- as.factor(data_debt$Ano)
 
-# means <- tapply(data_debt$`remaining_sp%`, data_debt$periodo_5, 
-#                mean, na.rm = TRUE)
-
 means <- tapply(data_debt$obs.richness, data_debt$Ano, 
                 mean, na.rm = TRUE)
 means
-
-#remaining_sp_plot <-
-#  ggplot(mapping = aes(x = periodo_5, y = `remaining_sp%`),
-#         data = data_debt) +
-#  labs(x = "Ano de amostragem", y = "Espécies restantes (%)") +
-#  geom_boxplot(outliers = FALSE) +
-#  scale_x_discrete(
-#    labels = c("2010" = "2010-2011", "2015" = "2015",
-#               "2016" = "2016", "2023" = "2023",
-#               "2024" = "2024")) +
-#  scale_y_continuous(breaks = seq(0, max(data_debt$`remaining_sp%`), by = 10)) +
-#  geom_point(position = position_jitter(), size = 3, alpha = 0.3) +
-#  stat_summary(fun = mean, geom = "point",
-#               size = 4, color = "red") +
-#  theme_bw(base_size = 16) +
-#  theme(panel.grid = element_blank(),
-#        panel.border = element_rect(colour = "black"),
-#        axis.title = element_text(colour = "black", face = "bold"),
-#        axis.text = element_text(colour = "black"),
-#        axis.ticks = element_line(colour = "black", size = 0.25),
-#        plot.margin = margin(0.5, 1.5, 0.5, 1.5, "cm"),
-#        legend.position = "bottom")
-#remaining_sp_plot
 
 years_sp_plot <-
   ggplot(mapping = aes(x = Ano, y = obs.richness),
@@ -352,7 +326,6 @@ zz <- coef(m1)[2] #check the z value of all 5 periods samples
 colnames(data_debt)[2] <- "A"
 #data_debt <- subset(data_debt, obs.richness > 0)
 data_debt$ilhas <- sub("(_[A-Za-z])?_[0-9]{4}$", "", data_debt$site)
-# data_debt$ilhas[10] <- "Beco_do_Catitu"
 
 ###############################
 #### NEGATIVE EXPONENTIAL MODEL
@@ -364,6 +337,23 @@ data_debt$ilhas <- sub("(_[A-Za-z])?_[0-9]{4}$", "", data_debt$site)
 #### t is the time since isolation
 #### k0 is the constant of relaxation time
 #### alpha is the scaling exponent for the relaxation time with respect to area; it indicates how the speed at which the extinction debt is paid off changes as the island varies in size. Halley et al., 2016 uses alpha ~ 0.5
+
+# model IF we use PDBFF mean as S initial
+# debt_ne <- nlme(
+# obs.richness ~ c * A^z + (Sinitial - c * A^z) * exp(-t / (k0 * A^alpha)),
+# data = data_debt,
+# fixed = c + z + k0 + alpha ~ 1,
+# random = k0 ~ 1 | ilhas,
+# correlation = corCAR1(form = ~ t | ilhas),
+# start = c(cc, zz, 10, 0.5),
+# control = nlmeControl(maxIter = 500, msMaxIter = 500))
+
+# summary(debt_ne)
+# intervals(debt_ne, which = "fixed")
+
+cf_rich <- vegan::specnumber(Balbina_CF[,2:109])
+s0_mean_Balbina <- mean(cf_rich)
+data_debt$Sinitial <- s0_mean_Balbina
 
 debt_ne <- nlme(
   obs.richness ~ c * A^z + (Sinitial - c * A^z) * exp(-t / (k0 * A^alpha)),
@@ -379,6 +369,8 @@ intervals(debt_ne, which = "fixed")
 
 
 
+
+
 ###############################
 #### POWER LAW MODEL
 #### S(t,A) = cAz + (S0 - cAz)*(1 + t / (k0 * A^alpha))^(-beta)
@@ -391,19 +383,22 @@ intervals(debt_ne, which = "fixed")
 #### alpha is the scaling exponent for the relaxation time with respect to area; it indicates how the speed at which the extinction debt is paid off changes as the island varies in size. Halley uses alpha ~ 0.5
 #### beta controls the shape of the decay tail; higher values indicate faster relaxation and shorter tails, whereas lower values indicate slower, more prolonged relaxation.
 
-debt_pl <- nlme(
-  obs.richness ~ c * A^z + (Sinitial - c * A^z) *
-    (1 + t / (k0 * A^alpha))^(-beta),
-  data = data_debt,
-  fixed = c + z + k0 + alpha + beta ~ 1,
-  random = k0 ~ 1 | ilhas,
-  correlation = corCAR1(form = ~ t | ilhas),
-  start = c(cc, zz, 10, 0.5, 1),
-  control = nlmeControl(maxIter = 1000,msMaxIter = 1000))
 
-summary(debt_pl)
-intervals(debt_pl)
-AIC(debt_ne, debt_pl)  #negative exp is better for the data (delta = 2.79)
+### Preciso arrumar o modelo power law. Ele não tá rodando
+
+# debt_pl <- nlme(
+# obs.richness ~ c * A^z + (Sinitial - c * A^z) *
+#   (1 + t / (k0 * A^alpha))^(-beta),
+# data = data_debt,
+# fixed = c + z + k0 + alpha + beta ~ 1,
+# random = k0 ~ 1 | ilhas,
+# correlation = corCAR1(form = ~ t | ilhas),
+# start = c(cc, zz, 10, 0.5, 1),
+# control = nlmeControl(maxIter = 1000,msMaxIter = 1000))
+
+# summary(debt_pl)
+# intervals(debt_pl)
+# AIC(debt_ne, debt_pl)  #negative exp is better for the data (delta = 2.79)
 
 
 #### I will keep using the negative exponential model below
@@ -439,29 +434,69 @@ ilha_params <- data_debt %>%
     k_ilha = k0_ilha * A^alpha_coef,
     t_half_life = k_ilha * log(2))
 
+
+##### Métrica = Extinction debt paid (%)
+##### debt_paid = (S_0 - S_2026) / (S_0 - S_eq) * 100
+
+richness_2026 <- ilha_params %>%
+  mutate(S_eq = c_coef * A^z_coef, 
+         S_pred_2026 = S_eq + 
+           (Sinitial - S_eq) * exp(-39 / k_ilha)) %>%
+  select(ilhas, A, Sinitial, k_ilha, S_eq, S_pred_2026)
+print(richness_2026)
+
+debt_paid <- (richness_2026$Sinitial - richness_2026$S_pred_2026) / 
+  (richness_2026$Sinitial - richness_2026$S_eq) * 100
+
+paste0("Estimamos que uma ilha de ", richness_2026$A, 
+  " ha já tenha pago ", round(debt_paid), 
+  "% de seu débito de extinção após ", 2026 - 1987, 
+  " anos de isolamento.")
+
+debt_paid_area <-
+plot(debt_paid ~ log10(richness_2026$A),
+     main = "Paid extinction debt over 39 years of island creation",
+     xlab = "Island area (ha)",
+     ylab = "Extinction debt paid (%)",
+     xaxt = "n",
+     las = 1,
+     pch = 21, col = "black", bg = "lightgrey", cex = 1.5)
+axis(1,
+     at = log10(c(1, 10, 100, 1000)),
+     labels = c(1, 10, 100, 1000))
+
+abline(v = log10(c(1, 10, 100, 1000)),
+       lty = "dashed", col = "lightgrey")
+
+setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Balbina_cap.3/Figures")
+ggsave("debt_paid_area.png",
+       plot = debt_paid_area,
+       width = 10,
+       height = 8,
+       units = "cm",
+       dpi = 900)
+
+
 # Mean half-life between islands
 cat("Mean half-life between islands:",
     mean(ilha_params$t_half_life), "\n")
+max(ilha_params$t_half_life)
+min(ilha_params$t_half_life)
 
 t_half_ilhas <- ilha_params %>%
   select(ilhas, A, k0_ilha, k_ilha, t_half_life)
 print(t_half_ilhas)
 
-# Calculating the extinction debt
-data_debt$S_eq <- c_coef * data_debt$A^z_coef
-data_debt$divida_inicial <-
-  data_debt$Sinitial - data_debt$S_eq
+estimar_meia_vida <- function(A) {
+  k <- k0_coef * A^alpha_coef
+  t_half <- k * log(2)
+  data.frame(A = A, k = k, t_half_life = t_half)}
 
-data_debt <- data_debt %>%
-  left_join(ilha_params %>% select(ilhas, k_ilha),
-            by = "ilhas")
+estimar_meia_vida(100)
 
-data_debt$divida_restante <-
-  data_debt$divida_inicial *
-  exp(-data_debt$t / data_debt$k_ilha)
 
 # Relaxation curves by island
-t_seq <- seq(0, max(data_debt$t) * 2, length.out = 200)
+t_seq <- seq(0, 100, length.out = 200)
 
 curvas <- ilha_params %>%
   crossing(t = t_seq) %>%
@@ -488,12 +523,14 @@ biogeograp_model_plot <-
   theme_bw(base_size = 16) +
   theme(panel.grid = element_blank(),
         panel.border = element_rect(colour = "black"),
-        axis.title = element_text(colour = "black", face = "bold"),
+        axis.title = element_text(colour = "black"),
         axis.text = element_text(colour = "black"),
         axis.ticks = element_line(colour = "black", size = 0.25),
         plot.margin = margin(0.5, 1.5, 0.5, 1.5, "cm"),
-        legend.position = "right")
-
+        legend.position = c(0.98, 0.98),
+        legend.justification = c("right", "top"),
+        legend.title = element_text(size=10, face="bold"),
+        legend.text = element_text(size = 10))
 biogeograp_model_plot
 
 setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Balbina_cap.3/Figures")
@@ -538,13 +575,13 @@ biogeograp_model_plot_ref <-
             colour = "grey85", linewidth = 0.4) +
   
   # Pontos observados
-  geom_point(data = data_debt, aes(x = t, y = obs.richness),
-             colour = "black", size = 2) +
+  # geom_point(data = data_debt, aes(x = t, y = obs.richness),
+  #           colour = "black", size = 2, alpha = 0.4) +
   
   # Curvas de referência, na frente, coloridas
   geom_line(data = curvas_ref,
             aes(x = t, y = S_pred, group = A, colour = A),
-            linewidth = 1.2) +
+            linewidth = 1) +
   
   scale_x_continuous(n.breaks = 10) +
   scale_y_continuous(n.breaks = 10) +
@@ -557,11 +594,14 @@ biogeograp_model_plot_ref <-
   theme_bw(base_size = 16) +
   theme(panel.grid = element_blank(),
         panel.border = element_rect(colour = "black"),
-        axis.title = element_text(colour = "black", face = "bold"),
+        axis.title = element_text(colour = "black"),
         axis.text = element_text(colour = "black"),
         axis.ticks = element_line(colour = "black", size = 0.25),
         plot.margin = margin(0.5, 1.5, 0.5, 1.5, "cm"),
-        legend.position = "right")
+        legend.position = c(0.98, 0.98),
+        legend.justification = c("right", "top"),
+        legend.title = element_text(size=10, face="bold"),
+        legend.text = element_text(size = 10))
 
 biogeograp_model_plot_ref
 setwd("C:/Users/ivana/OneDrive/PhD_INPA/3.Extinction_debt/Balbina_cap.3/Figures")
@@ -619,17 +659,15 @@ observed_data <- data_debt %>%
 
 initial_data <- data_debt %>%
   group_by(ilhas) %>%
-  summarise(
-    t = 0,
+  summarise(t = 0,
     richness = first(Sinitial),
     stage = "Initial",
-    .groups = "drop"
-  )
+    .groups = "drop")
 
-equilibrium_data <- data_debt %>%
+equilibrium_data <- richness_2026 %>%
   group_by(ilhas) %>%
   summarise(
-    t = max(t),
+    t = 50,
     richness = first(S_eq),
     stage = "Equilibrium",
     .groups = "drop"
