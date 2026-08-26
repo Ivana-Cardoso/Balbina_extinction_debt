@@ -1,0 +1,15 @@
+ID é um identificador único de cada site com o nome da ilha e o ano de amostragem agregados
+
+plot é o nome do transecto porque, às vezes, o Marco tem mais de um transecto na mesma ilha. Por exemplo, Martelo_C e Martelo_D
+
+site é somente o nome da ilha ou mata contínua, sem o ano e sem o identificador da parcela.
+
+area é a área de floresta de cada ilha. Eu calculei usando as imagens de satélite do primeiro ano de amostragem (2010, 2015, 2023) e a coleção 9 do MAPBiomas.
+
+Data é a data de amostragem. Quando as amostragens são durante dois dias em cada ano (como é o caso meu e do Anderson), eu considerei a data do primeiro dia de amostragem daquele ano.
+
+t é o tempo de isolamento de cada ilha. Eu calculei como a data de amostragem - a data de ativação da usina (01/10/1987)
+
+t_período é o tempo de isolamento considerando cinco períodos: 2010-2011, 2015, 2016, 2023, 2024. Eu calculei como o período menos o ano de ativação da usina (1987). Eu agrupei os dados do Marco em um período, e considerei 2010 para esse cálculo, porque ele amostra somente duas ilhas durante os dois anos, as outras são ou amostradas em 2010 ou em 2011.
+
+da coluna 8 (Mionectes_macconnelli) até a coluna 163 (Pachyramphus_marginatus) estão os dados de abundância de cada espécie em cada ilha e ano.
